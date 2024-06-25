@@ -40,16 +40,29 @@ export const deleteHistoryCont = async (_req: Request, res: Response) => {
 //get
 export const getEventCont = async (_req: Request, res: Response) => {
     const amqpUrl = 'amqp://Armando:armandorv@localhost';
+    let responseSent = false;
+
     amqp.connect(amqpUrl, (err, connection) => {
-        if (err) { throw err; }
+        if (err) { 
+            res.status(500).send("Error connecting to RabbitMQ");
+            return;
+        }
         connection.createChannel((err, channel) => {
-            if (err) { throw err; }
+            if (err) { 
+                res.status(500).send("Error creating channel");
+                connection.close();
+                return;
+            }
             const queueName = "Admin_queue";
             channel.assertQueue(queueName, { durable: true });
             channel.consume(queueName, (msg) => {
-                if (msg !== null) {
+                if (msg !== null && !responseSent) {
+                    responseSent = true;
                     res.json(JSON.parse(msg.content.toString()));
                     channel.ack(msg);
+                    channel.close(() => {
+                        connection.close();
+                    });
                 }
             });
         });
